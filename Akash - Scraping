@@ -1,0 +1,99 @@
+import requests
+from bs4 import BeautifulSoup
+import csv
+
+# Function to extract details for each product
+def extract_product_details(product):
+    # Extract product name
+    try:
+        product_name = product.find('span', class_='a-text-normal').text.strip()
+    except AttributeError:
+        product_name = None
+    
+    # Extract product price
+    try:
+        price_whole = product.find('span', class_='a-price-whole').text.strip()
+        price_fraction = product.find('span', class_='a-price-symbol').text.strip()
+        price = price_whole + price_fraction
+    except AttributeError:
+        price = None
+    
+    # Extract product rating
+    try:
+        rating = product.find('span', class_='a-icon-alt').text.strip()
+    except AttributeError:
+        rating = None
+    
+    # Extract seller name
+    seller_name = None
+    try:
+        # Look for the seller name under the "Sold by" section
+        seller_tag = product.find('span', text='Sold by')
+        if seller_tag:
+            seller_name = seller_tag.find_next('span').text.strip()
+        else:
+            # If not found, print message
+            print("Seller Name Not Found for product:", product_name)
+    except AttributeError:
+        print("Seller Name Not Found for product:", product_name)
+    
+    # Check if product is out of stock and skip those products
+    try:
+        if product.find('span', class_='a-size-medium a-color-price') and 'out of stock' in product.find('span', class_='a-size-medium a-color-price').text.strip().lower():
+            return None  # Skip out of stock products
+    except AttributeError:
+        pass
+    
+    return [product_name, price, rating, seller_name]
+
+# Function to scrape Amazon page
+def scrape_amazon_products(url):
+    # Send HTTP request to get the page content
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36"
+    }
+    response = requests.get(url, headers=headers)
+    
+    # Check if the page is fetched successfully
+    if response.status_code != 200:
+        print(f"Failed to retrieve page. Status code: {response.status_code}")
+        return []
+
+    # Parse the page content with BeautifulSoup
+    soup = BeautifulSoup(response.content, 'html.parser')
+    
+    # Find all product containers on the page
+    product_containers = soup.find_all('div', {'data-asin': True})
+
+    # List to hold all product details
+    product_details = []
+
+    # Loop through each product and extract details
+    for product in product_containers:
+        details = extract_product_details(product)
+        if details:
+            product_details.append(details)
+
+    return product_details
+
+# Main function to execute the scraping
+def main():
+    url = "https://www.amazon.in/s?rh=n%3A6612025031&fs=true&ref=lp_6612025031_sar"
+    
+    # Scrape product details
+    product_details = scrape_amazon_products(url)
+    
+    # Define CSV file name
+    filename = "amazon_products.csv"
+
+    # Write to CSV file
+    with open(filename, mode='w', newline='', encoding='utf-8') as file:
+        writer = csv.writer(file)
+        writer.writerow(["Product Name", "Price", "Rating", "Seller Name"])
+        writer.writerows(product_details)
+    
+    print(f"Data saved to {filename}")
+
+# Execute the main function
+if __name__ == "__main__":
+    main()
